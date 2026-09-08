@@ -24,7 +24,13 @@ const { days, corePracticeLoop } = require("../data/courseSeed");
       const request = route.request(),
         url = new URL(request.url());
       let result;
-      if (url.pathname === "/api/recordings") result = [];
+      if (url.pathname === "/api/auth/me")
+        result = {
+          id: "fixture-user",
+          email: "fixture@example.com",
+          name: "Fixture Speaker",
+        };
+      else if (url.pathname === "/api/recordings") result = [];
       else if (url.pathname === "/api/course") result = course;
       else if (url.pathname === "/api/logs" && request.method() === "GET")
         result = logs;

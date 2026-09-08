@@ -29,7 +29,8 @@ let course,
   logs = [],
   session = null,
   timer = null,
-  toastTimeout;
+  toastTimeout,
+  authUser = null;
 const main = document.querySelector("main");
 const sessions = new Map();
 let currentHash = location.hash;
@@ -73,6 +74,40 @@ async function api(url, body, method = "POST") {
   if (!response.ok)
     throw new Error(data.error || "Something went wrong. Please try again.");
   return data;
+}
+function renderAuth(mode = "login", message = "") {
+  const registering = mode === "register";
+  document.body.classList.add("auth-mode");
+  main.innerHTML = `<section class="auth-screen" aria-labelledby="auth-title"><div class="auth-card"><div class="auth-mark">s<span>•</span></div><div class="eyebrow">YOUR PERSONAL SPEAKING COACH</div><h1 id="auth-title">${registering ? "Make room for your voice." : "Welcome back."}</h1><p class="auth-intro">${registering ? "Create your space and build a stronger speaking habit, one day at a time." : "Sign in to pick up your practice where you left off."}</p><div class="auth-tabs" role="tablist" aria-label="Account access"><button class="auth-tab ${!registering ? "active" : ""}" data-auth-mode="login" role="tab" aria-selected="${!registering}">Sign in</button><button class="auth-tab ${registering ? "active" : ""}" data-auth-mode="register" role="tab" aria-selected="${registering}">Create account</button></div><form id="auth-form"><div class="auth-fields">${registering ? '<label for="auth-name">Your name</label><input id="auth-name" name="name" autocomplete="name" required minlength="2" />' : ""}<label for="auth-email">Email address</label><input id="auth-email" name="email" type="email" autocomplete="email" required /><label for="auth-password">Password</label><input id="auth-password" name="password" type="password" autocomplete="${registering ? "new-password" : "current-password"}" minlength="8" required /></div><p class="form-error" id="auth-error" role="alert">${escapeHtml(message)}</p><button class="button auth-submit" type="submit">${registering ? "Create my account" : "Sign in"} ${icon("arrow")}</button></form></div></section>`;
+  main.querySelector("#auth-form").addEventListener("submit", submitAuth);
+  main.querySelectorAll("[data-auth-mode]").forEach((button) =>
+    button.addEventListener("click", () => renderAuth(button.dataset.authMode)),
+  );
+  main.querySelector("input")?.focus();
+}
+async function submitAuth(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type=submit]");
+  const error = form.querySelector("#auth-error");
+  const registering = form.querySelector("#auth-name");
+  button.disabled = true;
+  error.textContent = "";
+  try {
+    authUser = await api(
+      registering ? "/api/auth/register" : "/api/auth/login",
+      Object.fromEntries(new FormData(form)),
+    );
+    document.body.classList.remove("auth-mode");
+    await loadCourse();
+  } catch (authError) {
+    error.textContent = authError.message;
+    button.disabled = false;
+  }
+}
+async function loadCourse() {
+  [course, logs] = await Promise.all([api("/api/course"), api("/api/logs")]);
+  render();
 }
 function notify(message) {
   const toast = document.querySelector("#toast");
@@ -416,9 +451,13 @@ document
   .forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
 async function load() {
   try {
-    [course, logs] = await Promise.all([api("/api/course"), api("/api/logs")]);
-    render();
+    authUser = await api("/api/auth/me");
+    await loadCourse();
   } catch (error) {
+      if (error.message === "Please sign in to continue.") {
+        renderAuth();
+        return;
+      }
     main.innerHTML = `<section class="empty"><h1>Let’s try that again.</h1><p>We couldn’t load your workshop. Your saved progress is still here.</p><p>${escapeHtml(error.message)}</p><button class="button" id="retry-load">Retry</button></section>`;
   }
 }

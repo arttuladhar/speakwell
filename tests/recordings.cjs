@@ -103,6 +103,23 @@ const { once } = require("node:events");
     page.setDefaultTimeout(15000);
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(base);
+    await page.getByRole("tab", { name: "Create account" }).click();
+    await page.getByLabel("Your name").fill("Recording Speaker");
+    await page
+      .getByLabel("Email address")
+      .fill("recordings@example.com");
+    await page.getByLabel("Password").fill("password123");
+    await page.getByRole("button", { name: "Create my account" }).click();
+    await page.getByText("Your 10-day journey").waitFor();
+    const authCookie = (await context.cookies())
+      .map(({ name, value }) => `${name}=${value}`)
+      .join("; ");
+    const apiFetch = (url, options = {}) =>
+      fetch(url, {
+        ...options,
+        headers: { ...options.headers, Cookie: authCookie },
+      });
     await page.goto(`${base}/#day/1`);
     await page
       .getByRole("button", { name: "Start recording", exact: true })
@@ -145,18 +162,18 @@ const { once } = require("node:events");
     await page
       .getByText("Recording saved. You can replay it below or in your journal.")
       .waitFor();
-    let rows = await (await fetch(`${base}/api/recordings`)).json();
+    let rows = await (await apiFetch(`${base}/api/recordings`)).json();
     assert.equal(rows.length, 1, "Retry cannot duplicate a committed take");
     const video = rows[0];
     assert.equal(video.day, 1);
     assert.equal(video.mime_type, "video/webm");
     const media = Buffer.from(
       await (
-        await fetch(`${base}/api/recordings/${video.id}/media`)
+        await apiFetch(`${base}/api/recordings/${video.id}/media`)
       ).arrayBuffer(),
     );
     assert.equal(media.length, video.size_bytes);
-    const range = await fetch(`${base}/api/recordings/${video.id}/media`, {
+    const range = await apiFetch(`${base}/api/recordings/${video.id}/media`, {
       headers: { Range: "bytes=0-15" },
     });
     assert.equal(range.status, 206);
@@ -164,7 +181,7 @@ const { once } = require("node:events");
       Buffer.from(await range.arrayBuffer()),
       media.subarray(0, 16),
     );
-    const suffix = await fetch(`${base}/api/recordings/${video.id}/media`, {
+    const suffix = await apiFetch(`${base}/api/recordings/${video.id}/media`, {
       headers: { Range: "bytes=-12" },
     });
     assert.deepEqual(
@@ -173,7 +190,7 @@ const { once } = require("node:events");
     );
     assert.equal(
       (
-        await fetch(`${base}/api/recordings/${video.id}/media`, {
+        await apiFetch(`${base}/api/recordings/${video.id}/media`, {
           headers: { Range: "bytes=999999999-" },
         })
       ).status,
@@ -181,13 +198,13 @@ const { once } = require("node:events");
     );
     assert.equal(
       (
-        await fetch(`${base}/api/recordings/${video.id}/media?download=1`)
+        await apiFetch(`${base}/api/recordings/${video.id}/media?download=1`)
       ).headers
         .get("content-disposition")
         .startsWith("attachment"),
       true,
     );
-    await page.reload();
+    await page.goto(`${base}/#day/1`);
     await page.locator(".saved-take video").waitFor();
     await page
       .getByRole("link", { name: "Practice journal", exact: true })
@@ -282,7 +299,7 @@ const { once } = require("node:events");
     // Real API validation and conflict handling.
     const id = "a".repeat(32);
     const put = (type, body, day = 1, recordingId = id) =>
-      fetch(`${base}/api/recordings/${recordingId}?day=${day}`, {
+      apiFetch(`${base}/api/recordings/${recordingId}?day=${day}`, {
         method: "PUT",
         headers: { "Content-Type": type },
         body,
@@ -300,21 +317,21 @@ const { once } = require("node:events");
       (await put("video/webm", Buffer.alloc(50 * 1024 * 1024 + 1))).status,
       413,
     );
-    assert.equal((await fetch(`${base}/api/recordings?day=11`)).status, 400);
+    assert.equal((await apiFetch(`${base}/api/recordings?day=11`)).status, 400);
     assert.equal(
-      (await fetch(`${base}/api/recordings/${id}/media`)).status,
+      (await apiFetch(`${base}/api/recordings/${id}/media`)).status,
       404,
     );
     assert.deepEqual(errors, []);
     await page.close();
     await stopServer();
     base = await startServer();
-    rows = await (await fetch(`${base}/api/recordings`)).json();
+    rows = await (await apiFetch(`${base}/api/recordings`)).json();
     assert.equal(rows.length, 3, "Recordings survive server restart");
     assert.deepEqual(
       Buffer.from(
         await (
-          await fetch(`${base}/api/recordings/${video.id}/media`)
+          await apiFetch(`${base}/api/recordings/${video.id}/media`)
         ).arrayBuffer(),
       ),
       media,
@@ -331,7 +348,7 @@ const { once } = require("node:events");
       )
       .waitFor();
     assert.equal(
-      (await fetch(`${base}/api/recordings/${video.id}/media`)).status,
+      (await apiFetch(`${base}/api/recordings/${video.id}/media`)).status,
       404,
     );
     console.log(

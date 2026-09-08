@@ -2,7 +2,7 @@
 
 Interactive local web app generated from your Joplin **"10 Day Public Speaking Mastery Course"** note.
 
-Speakwell is designed for local or trusted-network use. It does not provide user accounts, authentication, authorization, or automated speaking feedback.
+Speakwell is designed for local or trusted-network use. It provides local user accounts and session-based authentication, but not automated speaking feedback.
 
 ## Requirements
 
@@ -45,9 +45,16 @@ With the app running and Google Chrome installed:
 npm install --prefix /tmp/speakwell-browser-check playwright --no-audit --no-fund
 NODE_PATH=/tmp/speakwell-browser-check/node_modules node tests/user-flow.cjs
 NODE_PATH=/tmp/speakwell-browser-check/node_modules node tests/recordings.cjs
+NODE_PATH=/tmp/speakwell-browser-check/node_modules node tests/auth-flow.cjs
 ```
 
-The user-flow check uses isolated API fixtures. The recording check launches its own server with a temporary database and simulated media devices to exercise capture, uploads, retries, playback, restart persistence, deletion, and validation. Neither changes your saved progress or uses your physical camera or microphone.
+### E2E scenarios
+
+- `tests/user-flow.cjs` — Uses isolated API fixtures to visit all 10 day screens, verify direct URLs and browser Back/Forward navigation, retain in-progress drafts and timers, open resources, retry a failed completion, render the journal safely, validate form input, and check desktop/mobile layouts.
+- `tests/recordings.cjs` — Starts a temporary server and database, creates a test account through the signup screen, captures a simulated video take, saves it after an interrupted response, verifies retry idempotency, playback, downloads, byte ranges, navigation cleanup, journal visibility, restart persistence, deletion, permission errors, validation errors, and mobile layout.
+- `tests/auth-flow.cjs` — Starts a temporary server and database, opens a protected deep link while signed out, switches between sign-in and signup, creates an account, verifies the deep link is restored, signs in from a fresh browser context, and confirms invalid credentials show an error without entering the workshop.
+
+The user-flow check uses isolated API fixtures. The recording and authentication checks launch their own servers with temporary databases. None of these checks changes your saved progress or uses your physical camera or microphone.
 
 ## Configuration
 
