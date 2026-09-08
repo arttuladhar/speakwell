@@ -59,7 +59,10 @@ const { once } = require("node:events");
 
     const config = await fetch(`${base}/api/config`, { headers: { Cookie: cookie } });
     assert.equal(config.status, 200);
-    assert.deepEqual(await config.json(), { directRecordingUpload: false });
+    assert.deepEqual(await config.json(), {
+      directRecordingUpload: false,
+      recordingUploadError: null,
+    });
 
     const course = await fetch(`${base}/api/course`, { headers: { Cookie: cookie } });
     assert.equal(course.status, 200);

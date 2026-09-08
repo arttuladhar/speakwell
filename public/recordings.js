@@ -35,9 +35,7 @@ window.recordings = (() => {
   }
   async function directRecordingUploadEnabled() {
     if (directUpload === undefined)
-      directUpload = request("/api/config").then(
-        (config) => config.directRecordingUpload,
-      );
+      directUpload = request("/api/config");
     return directUpload;
   }
   async function checksum(blob) {
@@ -280,7 +278,8 @@ window.recordings = (() => {
     state.error = "";
     draw(state);
     try {
-      if (await directRecordingUploadEnabled()) {
+      const uploadConfig = await directRecordingUploadEnabled();
+      if (uploadConfig.directRecordingUpload) {
         const { upload } = await import("https://esm.sh/@vercel/blob@2.8.0/client");
         await upload(`recordings/${state.id}`, state.blob, {
           access: "public",
@@ -295,6 +294,8 @@ window.recordings = (() => {
             checksum: await checksum(state.blob),
           }),
         });
+      } else if (uploadConfig.recordingUploadError) {
+        throw new Error(uploadConfig.recordingUploadError);
       } else {
         await request(
           `/api/recordings/${state.id}?day=${state.day}${state.duration ? `&duration=${state.duration}` : ""}`,

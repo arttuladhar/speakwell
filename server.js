@@ -159,7 +159,14 @@ app.post("/api/recordings/client-upload", async (req, res) => {
 app.use("/api", requireAuth);
 
 app.get("/api/config", (req, res) => {
-  res.json({ directRecordingUpload: isPostgres && Boolean(process.env.BLOB_READ_WRITE_TOKEN) });
+  const directRecordingUpload = isPostgres && Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  res.json({
+    directRecordingUpload,
+    recordingUploadError:
+      isPostgres && !directRecordingUpload
+        ? "Recording storage is not configured. Set BLOB_READ_WRITE_TOKEN in Vercel."
+        : null,
+  });
 });
 
 
