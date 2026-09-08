@@ -188,6 +188,50 @@ test("persists the recording once the upload-completed webhook is verified", asy
   assert.equal(checksum, CHECKSUM);
 });
 
+test("rejects the recording when storage omits a content-length header", async () => {
+  const tokenPayload = JSON.stringify({
+    id: RECORDING_ID,
+    day: 3,
+    duration: 42,
+    mime: "video/webm",
+    checksum: CHECKSUM,
+    userId: USER.id,
+  });
+  const blobUrl = `https://example.public.blob.vercel-storage.com/recordings/${RECORDING_ID}`;
+  const requestBody = {
+    type: "blob.upload-completed",
+    payload: {
+      blob: {
+        url: blobUrl,
+        pathname: `recordings/${RECORDING_ID}`,
+        contentType: "video/webm",
+      },
+      tokenPayload,
+    },
+  };
+  const rawBody = JSON.stringify(requestBody);
+  const signature = crypto.createHmac("sha256", BLOB_TOKEN).update(rawBody).digest("hex");
+
+  const originalFetch = global.fetch;
+  // Do not persist metadata when storage cannot report the actual recording size.
+  global.fetch = (url, options) =>
+    url === blobUrl && options?.method === "HEAD"
+      ? Promise.resolve(new Response(null, { status: 200 }))
+      : originalFetch(url, options);
+  let response;
+  try {
+    response = await fetch(`${base}/api/recordings/client-upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-vercel-signature": signature },
+      body: rawBody,
+    });
+  } finally {
+    global.fetch = originalFetch;
+  }
+  assert.equal(response.status, 400);
+  assert.equal(recordingInserts.length, 0);
+});
+
 test("rejects an upload-completed webhook with no signature", async () => {
   const { status } = await postClientUpload({
     type: "blob.upload-completed",

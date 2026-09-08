@@ -1,5 +1,6 @@
 // Keep each day's recorder DOM alive across practice-step renders.
 window.recordings = (() => {
+  const { escapeHtml } = window.ui;
   const takes = new Map();
   const MAX_BYTES = 50 * 1024 * 1024;
   const types = [
@@ -43,6 +44,17 @@ window.recordings = (() => {
     return Array.from(new Uint8Array(digest), (byte) =>
       byte.toString(16).padStart(2, "0"),
     ).join("");
+  }
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // Vercel's upload-completed webhook (which inserts the DB row) runs asynchronously
+  // after the direct-to-Blob upload resolves, so poll briefly instead of assuming it's done.
+  async function waitForRecording(id, day) {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const rows = await request(`/api/recordings${day ? `?day=${day}` : ""}`);
+      if (rows.some((row) => row.id === id)) return true;
+      await wait(500);
+    }
+    return false;
   }
   function library(day) {
     const root = document.createElement("section");
@@ -279,6 +291,7 @@ window.recordings = (() => {
     draw(state);
     try {
       const uploadConfig = await directRecordingUploadEnabled();
+      let persisted = true;
       if (uploadConfig.directRecordingUpload) {
         const { upload } = await import("https://esm.sh/@vercel/blob@2.8.0/client");
         await upload(`recordings/${state.id}`, state.blob, {
@@ -294,6 +307,7 @@ window.recordings = (() => {
             checksum: await checksum(state.blob),
           }),
         });
+        persisted = await waitForRecording(state.id, state.day);
       } else if (uploadConfig.recordingUploadError) {
         throw new Error(uploadConfig.recordingUploadError);
       } else {
@@ -309,8 +323,9 @@ window.recordings = (() => {
       URL.revokeObjectURL(state.url);
       state.url = null;
       state.blob = null;
-      state.message =
-        "Recording saved. You can replay it below or in your journal.";
+      state.message = persisted
+        ? "Recording saved. You can replay it below or in your journal."
+        : "Recording uploaded and is finishing up. Refresh the list below in a moment if it isn’t there yet.";
       await state.library.refresh();
     } catch (error) {
       state.error = `${error.message} Your unsaved take is still here; retry Save recording or download a copy.`;

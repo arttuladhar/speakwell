@@ -93,10 +93,21 @@ const maxRecordingBytes = 50 * 1024 * 1024;
 
 async function uploadedBlobSize(blob) {
   if (Number.isSafeInteger(blob.size)) return blob.size;
-  const response = await fetch(blob.url, { method: "HEAD" });
-  if (!response.ok) return null;
-  const size = Number(response.headers.get("content-length"));
-  return Number.isSafeInteger(size) ? size : null;
+  // Storage can briefly lag right after upload, so retry a few times before giving up.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+    try {
+      const response = await fetch(blob.url, { method: "HEAD" });
+      if (!response.ok) continue;
+      const header = response.headers.get("content-length");
+      if (!header) continue;
+      const size = Number(header);
+      if (Number.isSafeInteger(size) && size > 0) return size;
+    } catch {
+      // Network hiccup: fall through and retry.
+    }
+  }
+  return null;
 }
 
 app.post("/api/recordings/client-upload", async (req, res) => {
@@ -145,8 +156,12 @@ app.post("/api/recordings/client-upload", async (req, res) => {
         const expectedPathname = `recordings/${recording.id}`;
         const size = await uploadedBlobSize(blob);
         const sizeInvalid =
-          !Number.isSafeInteger(size) || size < 1 || size > maxRecordingBytes;
-        if (blob.pathname !== expectedPathname || blob.contentType !== recording.mime || sizeInvalid) {
+          !Number.isSafeInteger(size) || size <= 0 || size > maxRecordingBytes;
+        if (
+          blob.pathname !== expectedPathname ||
+          blob.contentType !== recording.mime ||
+          sizeInvalid
+        ) {
           // Log which field mismatched; the client only sees a generic error.
           console.error("Recording upload mismatch:", {
             blobPathname: blob.pathname,
