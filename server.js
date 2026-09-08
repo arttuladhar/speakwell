@@ -134,13 +134,19 @@ app.post("/api/recordings/client-upload", async (req, res) => {
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
         const recording = JSON.parse(tokenPayload || "{}");
-        if (
-          blob.pathname !== `recordings/${recording.id}` ||
-          blob.contentType !== recording.mime ||
-          !Number.isSafeInteger(blob.size) ||
-          blob.size < 1 ||
-          blob.size > maxRecordingBytes
-        ) {
+        const expectedPathname = `recordings/${recording.id}`;
+        const sizeInvalid =
+          !Number.isSafeInteger(blob.size) || blob.size < 1 || blob.size > maxRecordingBytes;
+        if (blob.pathname !== expectedPathname || blob.contentType !== recording.mime || sizeInvalid) {
+          // Log which field mismatched; the client only sees a generic error.
+          console.error("Recording upload mismatch:", {
+            blobPathname: blob.pathname,
+            expectedPathname,
+            blobContentType: blob.contentType,
+            expectedMime: recording.mime,
+            blobSize: blob.size,
+            sizeInvalid,
+          });
           throw new Error("Uploaded recording details did not match the request.");
         }
         await run(
