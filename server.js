@@ -126,6 +126,10 @@ app.post("/api/recordings/client-upload", async (req, res) => {
           maximumSizeInBytes: maxRecordingBytes,
           addRandomSuffix: false,
           tokenPayload: JSON.stringify({ ...recording, userId: user.id }),
+          // Compute the callback URL from the request instead of relying on Vercel's
+          // auto-injected VERCEL_URL/VERCEL_ENV vars, which require a project setting
+          // ("Automatically expose System Environment Variables") that may be off.
+          callbackUrl: `${req.headers["x-forwarded-proto"] || "https"}://${req.headers.host}${req.originalUrl}`,
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
