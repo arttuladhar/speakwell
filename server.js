@@ -4,6 +4,14 @@ const express = require("express");
 const { del, put } = require("@vercel/blob");
 const { corePracticeLoop, days } = require("./data/courseSeed");
 const { all, get, initDb, isPostgres, run } = require("./db");
+const {
+  createSession,
+  destroySession,
+  login,
+  register,
+  requireAuth,
+  setSessionCookie,
+} = require("./auth");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,8 +19,59 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-app.get("/api/course", async (_req, res) => {
+app.get("/api/auth/me", async (req, res, next) => {
   try {
+    const user = await requireAuth(req, res, () => req.user);
+    if (!user) return;
+    res.json(req.user);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    const user = await register(req.body || {});
+    setSessionCookie(res, await createSession(user.id));
+    res.status(201).json(user);
+  } catch (error) {
+    const duplicate = /unique|duplicate/i.test(error.message);
+    res.status(duplicate ? 409 : 400).json({
+      error: duplicate ? "An account with that email already exists." : error.message,
+    });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const user = await login(req.body || {});
+    setSessionCookie(res, await createSession(user.id));
+    res.json(user);
+  } catch (error) {
+    res.status(401).json({ error: error.message });
+  }
+});
+
+app.post("/api/auth/logout", async (req, res, next) => {
+  try {
+    await destroySession(req, res);
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.use("/api", requireAuth);
+
+app.get("/api/course", async (req, res) => {
+  try {
+    for (const day of days)
+      await run(
+        `INSERT INTO user_progress (user_id, day, status, notes, self_rating, completed_at, updated_at)
+         VALUES (?, ?, 'not_started', '', NULL, NULL, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id, day) DO NOTHING`,
+        [req.user.id, day.day],
+      );
     const rows = await all(`
       SELECT
         c.day,
@@ -28,9 +87,9 @@ app.get("/api/course", async (_req, res) => {
         p.completed_at,
         p.updated_at
       FROM course_days c
-      LEFT JOIN progress p ON p.day = c.day
+      LEFT JOIN user_progress p ON p.day = c.day AND p.user_id = ?
       ORDER BY c.day ASC
-    `);
+    `, [req.user.id]);
 
     const data = rows.map((row) => ({
       day: row.day,
@@ -54,8 +113,8 @@ app.get("/api/course", async (_req, res) => {
       SELECT
         COUNT(*) AS total_days,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_days
-      FROM progress
-    `);
+      FROM user_progress WHERE user_id = ?
+    `, [req.user.id]);
 
     return res.json({
       corePracticeLoop,
@@ -106,12 +165,12 @@ app.put("/api/progress/:day", async (req, res) => {
           self_rating = ?,
           completed_at = ${completedAt},
           updated_at = CURRENT_TIMESTAMP
-      WHERE day = ?
+      WHERE user_id = ? AND day = ?
     `,
-      [status, String(notes || ""), ratingValue, day],
+      [status, String(notes || ""), ratingValue, req.user.id, day],
     );
 
-    const updated = await get(`SELECT * FROM progress WHERE day = ?`, [day]);
+    const updated = await get(`SELECT * FROM user_progress WHERE user_id = ? AND day = ?`, [req.user.id, day]);
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: err.message });

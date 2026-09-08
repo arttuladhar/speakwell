@@ -71,23 +71,34 @@ function all(sql, params = []) {
 
 async function initDb() {
   if (usePostgres) {
+    await run(`CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+      password_hash TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
     await run(`CREATE TABLE IF NOT EXISTS course_days (
       day INTEGER PRIMARY KEY, title TEXT NOT NULL, focus TEXT NOT NULL,
       presentation TEXT NOT NULL, exercise_duration TEXT NOT NULL,
       exercise_json TEXT NOT NULL, reflection_json TEXT NOT NULL
     )`);
-    await run(`CREATE TABLE IF NOT EXISTS progress (
-      day INTEGER PRIMARY KEY, status TEXT NOT NULL DEFAULT 'not_started',
+    await run(`CREATE TABLE IF NOT EXISTS user_progress (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, day INTEGER NOT NULL,
+      PRIMARY KEY (user_id, day), status TEXT NOT NULL DEFAULT 'not_started',
       notes TEXT NOT NULL DEFAULT '', self_rating INTEGER, completed_at TIMESTAMPTZ,
       updated_at TIMESTAMPTZ NOT NULL, FOREIGN KEY(day) REFERENCES course_days(day)
     )`);
-    await run(`CREATE TABLE IF NOT EXISTS practice_logs (
-      id BIGSERIAL PRIMARY KEY, day INTEGER NOT NULL, duration_minutes INTEGER NOT NULL,
+    await run(`CREATE TABLE IF NOT EXISTS user_practice_logs (
+      id BIGSERIAL PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      day INTEGER NOT NULL, duration_minutes INTEGER NOT NULL,
       energy_level INTEGER, confidence_level INTEGER, notes TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL, FOREIGN KEY(day) REFERENCES course_days(day)
     )`);
-    await run(`CREATE TABLE IF NOT EXISTS recordings (
-      id TEXT PRIMARY KEY, day INTEGER NOT NULL, mime_type TEXT NOT NULL,
+    await run(`CREATE TABLE IF NOT EXISTS user_recordings (
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      day INTEGER NOT NULL, mime_type TEXT NOT NULL,
       duration_seconds INTEGER, size_bytes INTEGER NOT NULL, checksum TEXT NOT NULL,
       blob_url TEXT NOT NULL, blob_pathname TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       FOREIGN KEY(day) REFERENCES course_days(day)
@@ -102,11 +113,18 @@ async function initDb() {
         day.day, day.title, day.focus, day.presentation, day.exerciseDuration,
         JSON.stringify(day.exercise), JSON.stringify(day.reflection),
       ]);
-      await run(`INSERT INTO progress (day, status, notes, self_rating, completed_at, updated_at)
-        VALUES (?, 'not_started', '', NULL, NULL, NOW()) ON CONFLICT (day) DO NOTHING`, [day.day]);
     }
     return;
   }
+
+  await run(`CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+    password_hash TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
 
   await run(`CREATE TABLE IF NOT EXISTS course_days (
     day INTEGER PRIMARY KEY, title TEXT NOT NULL, focus TEXT NOT NULL,
@@ -129,6 +147,21 @@ async function initDb() {
     media BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY(day) REFERENCES course_days(day)
   )`);
+  await run(`CREATE TABLE IF NOT EXISTS user_progress (
+    user_id TEXT NOT NULL, day INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'not_started',
+    notes TEXT NOT NULL DEFAULT '', self_rating INTEGER, completed_at TEXT,
+    updated_at TEXT NOT NULL, PRIMARY KEY(user_id, day), FOREIGN KEY(user_id) REFERENCES users(id)
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS user_practice_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, day INTEGER NOT NULL,
+    duration_minutes INTEGER NOT NULL, energy_level INTEGER, confidence_level INTEGER,
+    notes TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id)
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS user_recordings (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL, day INTEGER NOT NULL, mime_type TEXT NOT NULL,
+    duration_seconds INTEGER, size_bytes INTEGER NOT NULL, checksum TEXT NOT NULL,
+    media BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id)
+  )`);
   for (const day of days) {
     await run(`INSERT OR REPLACE INTO course_days
       (day, title, focus, presentation, exercise_duration, exercise_json, reflection_json)
@@ -136,9 +169,6 @@ async function initDb() {
       day.day, day.title, day.focus, day.presentation, day.exerciseDuration,
       JSON.stringify(day.exercise), JSON.stringify(day.reflection),
     ]);
-    await run(`INSERT OR IGNORE INTO progress
-      (day, status, notes, self_rating, completed_at, updated_at)
-      VALUES (?, 'not_started', '', NULL, NULL, datetime('now'))`, [day.day]);
   }
 }
 
