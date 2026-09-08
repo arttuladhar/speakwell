@@ -37,6 +37,11 @@ async function seedMockUser() {
 }
 
 app.use(express.json());
+// Prevent conditional-GET caching from serving stale, per-user JSON (e.g. 304 with outdated recordings list).
+app.use("/api", (req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/auth/me", requireAuth, (req, res) => {
@@ -89,6 +94,9 @@ const maxRecordingBytes = 50 * 1024 * 1024;
 app.post("/api/recordings/client-upload", async (req, res) => {
   if (!isPostgres || !process.env.BLOB_READ_WRITE_TOKEN) {
     return res.status(404).json({ error: "Direct uploads are unavailable." });
+  }
+  if (req.body?.type !== "blob.generate-client-token") {
+    return res.status(400).json({ error: "Invalid recording upload request." });
   }
   try {
     const result = await handleUpload({
@@ -152,7 +160,12 @@ app.post("/api/recordings/client-upload", async (req, res) => {
     res.status(200).json(result);
   } catch (error) {
     console.error("Could not authorize direct recording upload:", error);
-    res.status(400).json({ error: "Could not start the recording upload. Please retry." });
+    res.status(400).json({
+      error:
+        error.message?.includes("No blob credentials")
+          ? "Recording storage credentials are unavailable. Verify BLOB_READ_WRITE_TOKEN in Vercel and redeploy."
+          : "Could not start the recording upload. Check Vercel Function logs and retry.",
+    });
   }
 });
 
