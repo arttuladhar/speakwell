@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "test:progress-update": "node tests/progress-update.cjs",
     "test:user-flow": "node tests/user-flow.cjs",
     "test:auth-flow": "node tests/auth-flow.cjs",
     "test:hooks": "node .github/hooks/pre-commit-validation.test.cjs"

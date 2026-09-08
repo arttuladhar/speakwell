@@ -178,7 +178,7 @@ app.put("/api/progress/:day", async (req, res) => {
     const completedAt = status === "completed" ? "CURRENT_TIMESTAMP" : "NULL";
     await run(
       `
-      UPDATE progress
+      UPDATE user_progress
       SET status = ?,
           notes = ?,
           self_rating = ?,
