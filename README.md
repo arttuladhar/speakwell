@@ -68,7 +68,7 @@ The database contains workshop progress, practice logs, and saved recordings. Ba
 
 ### Vercel
 
-Vercel's filesystem is not persistent. When `VERCEL=1`, the app uses `/tmp/speakwell-data` so the server can start, but progress and recordings may be lost when a serverless instance is replaced. Use the Docker Compose deployment for durable SQLite storage, or connect the app to an external database and object storage before using Vercel for production data.
+The Vercel deployment uses Neon Postgres for relational data and Vercel Blob for recordings. Set `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN` in the Vercel project environment. Do not use the temporary `/tmp` SQLite fallback for production data. See [VERCEL-DEPLOYMENT.md](VERCEL-DEPLOYMENT.md) for setup and GitHub Actions deployment instructions.
 
 ## Run locally
 

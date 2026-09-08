@@ -1,129 +1,12 @@
-const fs = require("fs");
 const path = require("path");
 const { createHash } = require("node:crypto");
 const express = require("express");
-const sqlite3 = require("sqlite3").verbose();
+const { del, put } = require("@vercel/blob");
 const { corePracticeLoop, days } = require("./data/courseSeed");
+const { all, get, initDb, isPostgres, run } = require("./db");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const defaultDataDir =
-  process.env.VERCEL === "1"
-    ? path.join("/tmp", "speakwell-data")
-    : path.join(__dirname, "data");
-const dataDir = process.env.DATA_DIR || defaultDataDir;
-const dbPath = path.join(dataDir, "workshop.db");
-
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const db = new sqlite3.Database(dbPath);
-
-function run(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function onRun(err) {
-      if (err) return reject(err);
-      resolve({ changes: this.changes, lastID: this.lastID });
-    });
-  });
-}
-
-function get(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) return reject(err);
-      resolve(row);
-    });
-  });
-}
-
-function all(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) return reject(err);
-      resolve(rows);
-    });
-  });
-}
-
-async function initDb() {
-  await run(`
-    CREATE TABLE IF NOT EXISTS course_days (
-      day INTEGER PRIMARY KEY,
-      title TEXT NOT NULL,
-      focus TEXT NOT NULL,
-      presentation TEXT NOT NULL,
-      exercise_duration TEXT NOT NULL,
-      exercise_json TEXT NOT NULL,
-      reflection_json TEXT NOT NULL
-    )
-  `);
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS progress (
-      day INTEGER PRIMARY KEY,
-      status TEXT NOT NULL DEFAULT 'not_started',
-      notes TEXT NOT NULL DEFAULT '',
-      self_rating INTEGER,
-      completed_at TEXT,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY(day) REFERENCES course_days(day)
-    )
-  `);
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS practice_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      day INTEGER NOT NULL,
-      duration_minutes INTEGER NOT NULL,
-      energy_level INTEGER,
-      confidence_level INTEGER,
-      notes TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL,
-      FOREIGN KEY(day) REFERENCES course_days(day)
-    )
-  `);
-
-  await run(`CREATE TABLE IF NOT EXISTS recordings (
-    id TEXT PRIMARY KEY,
-    day INTEGER NOT NULL,
-    mime_type TEXT NOT NULL,
-    duration_seconds INTEGER,
-    size_bytes INTEGER NOT NULL,
-    checksum TEXT NOT NULL,
-    media BLOB NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY(day) REFERENCES course_days(day)
-  )`);
-
-  for (const day of days) {
-    await run(
-      `
-      INSERT OR REPLACE INTO course_days
-      (day, title, focus, presentation, exercise_duration, exercise_json, reflection_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `,
-      [
-        day.day,
-        day.title,
-        day.focus,
-        day.presentation,
-        day.exerciseDuration,
-        JSON.stringify(day.exercise),
-        JSON.stringify(day.reflection),
-      ],
-    );
-
-    await run(
-      `
-      INSERT OR IGNORE INTO progress (day, status, notes, self_rating, completed_at, updated_at)
-      VALUES (?, 'not_started', '', NULL, NULL, datetime('now'))
-    `,
-      [day.day],
-    );
-  }
-}
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
@@ -214,7 +97,7 @@ app.put("/api/progress/:day", async (req, res) => {
         .json({ error: "selfRating must be between 1 and 10" });
     }
 
-    const completedAt = status === "completed" ? "datetime('now')" : "NULL";
+    const completedAt = status === "completed" ? "CURRENT_TIMESTAMP" : "NULL";
     await run(
       `
       UPDATE progress
@@ -222,7 +105,7 @@ app.put("/api/progress/:day", async (req, res) => {
           notes = ?,
           self_rating = ?,
           completed_at = ${completedAt},
-          updated_at = datetime('now')
+          updated_at = CURRENT_TIMESTAMP
       WHERE day = ?
     `,
       [status, String(notes || ""), ratingValue, day],
@@ -285,7 +168,7 @@ app.post("/api/logs", async (req, res) => {
       `
       INSERT INTO practice_logs
       (day, duration_minutes, energy_level, confidence_level, notes, created_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)${isPostgres ? " RETURNING id" : ""}
     `,
       [
         parsedDay,
@@ -297,7 +180,7 @@ app.post("/api/logs", async (req, res) => {
     );
 
     const row = await get(`SELECT * FROM practice_logs WHERE id = ?`, [
-      result.lastID,
+      result.lastID || result.rows[0]?.id,
     ]);
     return res.status(201).json(row);
   } catch (err) {
@@ -345,7 +228,7 @@ app.get("/api/recordings", async (req, res) => {
   try {
     res.json(
       await all(
-        `SELECT ${recordingFields} FROM recordings ${day === null ? "" : "WHERE day = ?"} ORDER BY created_at DESC, rowid DESC`,
+        `SELECT ${recordingFields} FROM recordings ${day === null ? "" : "WHERE day = ?"} ORDER BY created_at DESC, id DESC`,
         day === null ? [] : [day],
       ),
     );
@@ -404,10 +287,33 @@ app.put(
     try {
       const checksum = createHash("sha256").update(media).digest("hex");
       // A stable client ID makes retrying an interrupted upload safe.
-      await run(
-        `INSERT OR IGNORE INTO recordings (id, day, mime_type, duration_seconds, size_bytes, checksum, media) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [req.params.id, day, mime, duration, media.length, checksum, media],
-      );
+      if (isPostgres) {
+        const blob = await put(`recordings/${req.params.id}`, media, {
+          access: "public",
+          addRandomSuffix: false,
+          contentType: mime,
+        });
+        await run(
+          `INSERT INTO recordings
+            (id, day, mime_type, duration_seconds, size_bytes, checksum, blob_url, blob_pathname)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+          [
+            req.params.id,
+            day,
+            mime,
+            duration,
+            media.length,
+            checksum,
+            blob.url,
+            blob.pathname,
+          ],
+        );
+      } else {
+        await run(
+          `INSERT OR IGNORE INTO recordings (id, day, mime_type, duration_seconds, size_bytes, checksum, media) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [req.params.id, day, mime, duration, media.length, checksum, media],
+        );
+      }
       const saved = await get(
         `SELECT ${recordingFields}, checksum FROM recordings WHERE id = ?`,
         [req.params.id],
@@ -441,6 +347,14 @@ app.get("/api/recordings/:id/media", async (req, res) => {
   if (!validRecordingId(req.params.id))
     return res.status(404).json({ error: "Recording not found" });
   try {
+    if (isPostgres) {
+      const row = await get(
+        "SELECT blob_url FROM recordings WHERE id = ?",
+        [req.params.id],
+      );
+      if (!row) return res.status(404).json({ error: "Recording not found" });
+      return res.redirect(307, row.blob_url);
+    }
     // ponytail: bounded 50 MB blobs suit this personal app; stream files if storage or concurrency grows.
     const row = await get(
       "SELECT mime_type, media, size_bytes, day FROM recordings WHERE id = ?",
@@ -497,6 +411,14 @@ app.delete("/api/recordings/:id", async (req, res) => {
   if (!validRecordingId(req.params.id))
     return res.status(404).json({ error: "Recording not found" });
   try {
+    if (isPostgres) {
+      const row = await get(
+        "SELECT blob_url FROM recordings WHERE id = ?",
+        [req.params.id],
+      );
+      if (!row) return res.status(404).json({ error: "Recording not found" });
+      await del(row.blob_url);
+    }
     const result = await run("DELETE FROM recordings WHERE id = ?", [
       req.params.id,
     ]);
@@ -521,15 +443,21 @@ app.use((error, _req, res, _next) => {
     });
 });
 
-initDb()
-  .then(() => {
-    const server = app.listen(PORT, () => {
-      console.log(
-        `Workshop app running at http://localhost:${server.address().port}`,
-      );
+const ready = initDb();
+
+if (require.main === module) {
+  ready
+    .then(() => {
+      const server = app.listen(PORT, () => {
+        console.log(
+          `Workshop app running at http://localhost:${server.address().port}`,
+        );
+      });
+    })
+    .catch((err) => {
+      console.error("Failed to initialize database:", err);
+      process.exit(1);
     });
-  })
-  .catch((err) => {
-    console.error("Failed to initialize database:", err);
-    process.exit(1);
-  });
+}
+
+module.exports = { app, ready };
