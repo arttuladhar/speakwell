@@ -38,6 +38,8 @@ Copy the `orgId` and `projectId` values into the GitHub secrets. Never commit `.
 
 After the secrets are configured, every push to `main` runs the deployment workflow. The workflow pulls the production environment, builds the Vercel output, and deploys the prebuilt result.
 
+If GitHub Actions fails with `You defined "--token", but it's missing a value`, confirm that `VERCEL_TOKEN` is configured as a repository secret for the branch or environment running the workflow. An unset secret is rendered as an empty token in the workflow command.
+
 ## Local Vercel verification
 
 Install the Vercel CLI and link the project:
