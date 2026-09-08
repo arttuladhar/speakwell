@@ -91,6 +91,14 @@ const recordingTypes = new Set([
 const validRecordingId = (id) => /^[a-f0-9]{32}$/.test(id);
 const maxRecordingBytes = 50 * 1024 * 1024;
 
+async function uploadedBlobSize(blob) {
+  if (Number.isSafeInteger(blob.size)) return blob.size;
+  const response = await fetch(blob.url, { method: "HEAD" });
+  if (!response.ok) return null;
+  const size = Number(response.headers.get("content-length"));
+  return Number.isSafeInteger(size) ? size : null;
+}
+
 app.post("/api/recordings/client-upload", async (req, res) => {
   if (!isPostgres || !process.env.BLOB_READ_WRITE_TOKEN) {
     return res.status(404).json({ error: "Direct uploads are unavailable." });
@@ -135,8 +143,9 @@ app.post("/api/recordings/client-upload", async (req, res) => {
       onUploadCompleted: async ({ blob, tokenPayload }) => {
         const recording = JSON.parse(tokenPayload || "{}");
         const expectedPathname = `recordings/${recording.id}`;
+        const size = await uploadedBlobSize(blob);
         const sizeInvalid =
-          !Number.isSafeInteger(blob.size) || blob.size < 1 || blob.size > maxRecordingBytes;
+          !Number.isSafeInteger(size) || size < 1 || size > maxRecordingBytes;
         if (blob.pathname !== expectedPathname || blob.contentType !== recording.mime || sizeInvalid) {
           // Log which field mismatched; the client only sees a generic error.
           console.error("Recording upload mismatch:", {
@@ -144,7 +153,7 @@ app.post("/api/recordings/client-upload", async (req, res) => {
             expectedPathname,
             blobContentType: blob.contentType,
             expectedMime: recording.mime,
-            blobSize: blob.size,
+            blobSize: size,
             sizeInvalid,
           });
           throw new Error("Uploaded recording details did not match the request.");
@@ -159,7 +168,7 @@ app.post("/api/recordings/client-upload", async (req, res) => {
             recording.day,
             recording.mime,
             recording.duration,
-            blob.size,
+            size,
             recording.checksum,
             blob.url,
             blob.pathname,

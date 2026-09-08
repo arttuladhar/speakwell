@@ -137,14 +137,14 @@ test("persists the recording once the upload-completed webhook is verified", asy
     checksum: CHECKSUM,
     userId: USER.id,
   });
+  const blobUrl = `https://example.public.blob.vercel-storage.com/recordings/${RECORDING_ID}`;
   const requestBody = {
     type: "blob.upload-completed",
     payload: {
       blob: {
-        url: `https://example.public.blob.vercel-storage.com/recordings/${RECORDING_ID}`,
+        url: blobUrl,
         pathname: `recordings/${RECORDING_ID}`,
         contentType: "video/webm",
-        size: 12345,
       },
       tokenPayload,
     },
@@ -152,11 +152,26 @@ test("persists the recording once the upload-completed webhook is verified", asy
   const rawBody = JSON.stringify(requestBody);
   const signature = crypto.createHmac("sha256", BLOB_TOKEN).update(rawBody).digest("hex");
 
-  const response = await fetch(`${base}/api/recordings/client-upload`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-vercel-signature": signature },
-    body: rawBody,
-  });
+  const originalFetch = global.fetch;
+  global.fetch = (url, options) =>
+    url === blobUrl && options?.method === "HEAD"
+      ? Promise.resolve(
+          new Response(null, {
+            status: 200,
+            headers: { "content-length": "12345" },
+          }),
+        )
+      : originalFetch(url, options);
+  let response;
+  try {
+    response = await fetch(`${base}/api/recordings/client-upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-vercel-signature": signature },
+      body: rawBody,
+    });
+  } finally {
+    global.fetch = originalFetch;
+  }
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     type: "blob.upload-completed",
