@@ -37,14 +37,8 @@ async function seedMockUser() {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-app.get("/api/auth/me", async (req, res, next) => {
-  try {
-    const user = await requireAuth(req, res, () => req.user);
-    if (!user) return;
-    res.json(req.user);
-  } catch (error) {
-    next(error);
-  }
+app.get("/api/auth/me", requireAuth, (req, res) => {
+  res.json(req.user);
 });
 
 app.post("/api/auth/register", async (req, res) => {
@@ -244,11 +238,12 @@ app.post("/api/logs", async (req, res) => {
 
     const result = await run(
       `
-      INSERT INTO practice_logs
-      (day, duration_minutes, energy_level, confidence_level, notes, created_at)
-      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)${isPostgres ? " RETURNING id" : ""}
+      INSERT INTO user_practice_logs
+      (user_id, day, duration_minutes, energy_level, confidence_level, notes, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)${isPostgres ? " RETURNING id" : ""}
     `,
       [
+        req.user.id,
         parsedDay,
         parsedDuration,
         parsedEnergy,
@@ -257,9 +252,10 @@ app.post("/api/logs", async (req, res) => {
       ],
     );
 
-    const row = await get(`SELECT * FROM practice_logs WHERE id = ?`, [
-      result.lastID || result.rows[0]?.id,
-    ]);
+    const row = await get(
+      `SELECT * FROM user_practice_logs WHERE id = ? AND user_id = ?`,
+      [result.lastID || result.rows[0]?.id, req.user.id],
+    );
     return res.status(201).json(row);
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -275,10 +271,13 @@ app.get("/api/logs", async (req, res) => {
 
     const logs = day
       ? await all(
-          `SELECT * FROM practice_logs WHERE day = ? ORDER BY id DESC`,
-          [day],
+          `SELECT * FROM user_practice_logs WHERE user_id = ? AND day = ? ORDER BY id DESC`,
+          [req.user.id, day],
         )
-      : await all(`SELECT * FROM practice_logs ORDER BY id DESC`);
+      : await all(
+          `SELECT * FROM user_practice_logs WHERE user_id = ? ORDER BY id DESC`,
+          [req.user.id],
+        );
 
     return res.json(logs);
   } catch (err) {
@@ -306,8 +305,8 @@ app.get("/api/recordings", async (req, res) => {
   try {
     res.json(
       await all(
-        `SELECT ${recordingFields} FROM recordings ${day === null ? "" : "WHERE day = ?"} ORDER BY created_at DESC, id DESC`,
-        day === null ? [] : [day],
+        `SELECT ${recordingFields} FROM user_recordings WHERE user_id = ?${day === null ? "" : " AND day = ?"} ORDER BY created_at DESC, id DESC`,
+        day === null ? [req.user.id] : [req.user.id, day],
       ),
     );
   } catch (error) {
@@ -372,11 +371,12 @@ app.put(
           contentType: mime,
         });
         await run(
-          `INSERT INTO recordings
-            (id, day, mime_type, duration_seconds, size_bytes, checksum, blob_url, blob_pathname)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+          `INSERT INTO user_recordings
+            (id, user_id, day, mime_type, duration_seconds, size_bytes, checksum, blob_url, blob_pathname)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
           [
             req.params.id,
+            req.user.id,
             day,
             mime,
             duration,
@@ -388,15 +388,16 @@ app.put(
         );
       } else {
         await run(
-          `INSERT OR IGNORE INTO recordings (id, day, mime_type, duration_seconds, size_bytes, checksum, media) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [req.params.id, day, mime, duration, media.length, checksum, media],
+          `INSERT OR IGNORE INTO user_recordings (id, user_id, day, mime_type, duration_seconds, size_bytes, checksum, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [req.params.id, req.user.id, day, mime, duration, media.length, checksum, media],
         );
       }
       const saved = await get(
-        `SELECT ${recordingFields}, checksum FROM recordings WHERE id = ?`,
-        [req.params.id],
+        `SELECT ${recordingFields}, checksum FROM user_recordings WHERE id = ? AND user_id = ?`,
+        [req.params.id, req.user.id],
       );
       if (
+        !saved ||
         saved.checksum !== checksum ||
         saved.day !== day ||
         saved.mime_type !== mime ||
@@ -427,16 +428,16 @@ app.get("/api/recordings/:id/media", async (req, res) => {
   try {
     if (isPostgres) {
       const row = await get(
-        "SELECT blob_url FROM recordings WHERE id = ?",
-        [req.params.id],
+        "SELECT blob_url FROM user_recordings WHERE id = ? AND user_id = ?",
+        [req.params.id, req.user.id],
       );
       if (!row) return res.status(404).json({ error: "Recording not found" });
       return res.redirect(307, row.blob_url);
     }
     // ponytail: bounded 50 MB blobs suit this personal app; stream files if storage or concurrency grows.
     const row = await get(
-      "SELECT mime_type, media, size_bytes, day FROM recordings WHERE id = ?",
-      [req.params.id],
+      "SELECT mime_type, media, size_bytes, day FROM user_recordings WHERE id = ? AND user_id = ?",
+      [req.params.id, req.user.id],
     );
     if (!row) return res.status(404).json({ error: "Recording not found" });
     res.set({
@@ -491,15 +492,16 @@ app.delete("/api/recordings/:id", async (req, res) => {
   try {
     if (isPostgres) {
       const row = await get(
-        "SELECT blob_url FROM recordings WHERE id = ?",
-        [req.params.id],
+        "SELECT blob_url FROM user_recordings WHERE id = ? AND user_id = ?",
+        [req.params.id, req.user.id],
       );
       if (!row) return res.status(404).json({ error: "Recording not found" });
       await del(row.blob_url);
     }
-    const result = await run("DELETE FROM recordings WHERE id = ?", [
-      req.params.id,
-    ]);
+    const result = await run(
+      "DELETE FROM user_recordings WHERE id = ? AND user_id = ?",
+      [req.params.id, req.user.id],
+    );
     if (!result.changes)
       return res.status(404).json({ error: "Recording not found" });
     res.json({ deleted: true });

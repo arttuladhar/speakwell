@@ -58,6 +58,13 @@ const { once } = require("node:events");
       }),
     });
     assert.equal(mockLogin.status, 200);
+    const mockUser = await mockLogin.json();
+    const mockCookie = mockLogin.headers.get("set-cookie").split(";", 1)[0];
+    const currentUser = await fetch(`${base}/api/auth/me`, {
+      headers: { Cookie: mockCookie },
+    });
+    assert.equal(currentUser.status, 200);
+    assert.deepEqual(await currentUser.json(), mockUser);
     browser = await chromium.launch({ channel: "chrome", headless: true });
 
     const signupContext = await browser.newContext();

@@ -43,16 +43,20 @@ Playwright is installed as a dev dependency (`npm ci` or `npm install` sets it u
 
 ```bash
 npm start &                # tests/user-flow.cjs needs the app already running
-npm run test:user-flow
-npm run test:auth-flow     # spawns its own temporary server and database
+npm test                   # fast, dependency-free checks
+npm run test:api           # spawns a temporary server and database
+npm run test:e2e           # browser checks; user-flow needs the app already running
+npm run test:all           # runs every tier after the app is started
 ```
 
 ### E2E scenarios
 
 - `tests/user-flow.cjs` — Uses isolated API fixtures to visit all 10 day screens, verify direct URLs and browser Back/Forward navigation, retain in-progress drafts and timers, open resources, retry a failed completion, render the journal safely, validate form input, and check desktop/mobile layouts.
 - `tests/auth-flow.cjs` — Starts a temporary server and database, opens a protected deep link while signed out, switches between sign-in and signup, creates an account, verifies the deep link is restored, signs in from a fresh browser context, and confirms invalid credentials show an error without entering the workshop.
+- `tests/progress-update.cjs` — Starts a temporary server and database to verify authenticated course, progress, log, and recording APIs use user-scoped data.
+- `tests/unit/course-seed.test.cjs` — Fast unit coverage for the canonical course definition.
 
-The user-flow check uses isolated API fixtures. The authentication check launches its own server with a temporary database. Neither check changes your saved progress or uses your physical camera or microphone.
+The user-flow check uses isolated API fixtures. The authentication and API checks launch their own temporary server with a temporary database. Neither check changes your saved progress or uses your physical camera or microphone.
 
 ## Configuration
 
