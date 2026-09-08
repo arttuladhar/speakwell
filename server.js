@@ -7,7 +7,11 @@ const { corePracticeLoop, days } = require("./data/courseSeed");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const dataDir = process.env.DATA_DIR || path.join(__dirname, "data");
+const defaultDataDir =
+  process.env.VERCEL === "1"
+    ? path.join("/tmp", "speakwell-data")
+    : path.join(__dirname, "data");
+const dataDir = process.env.DATA_DIR || defaultDataDir;
 const dbPath = path.join(dataDir, "workshop.db");
 
 if (!fs.existsSync(dataDir)) {

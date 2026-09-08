@@ -66,6 +66,10 @@ PORT=4000 DATA_DIR=/tmp/speakwell-data npm start
 
 The database contains workshop progress, practice logs, and saved recordings. Back it up before moving or resetting an installation.
 
+### Vercel
+
+Vercel's filesystem is not persistent. When `VERCEL=1`, the app uses `/tmp/speakwell-data` so the server can start, but progress and recordings may be lost when a serverless instance is replaced. Use the Docker Compose deployment for durable SQLite storage, or connect the app to an external database and object storage before using Vercel for production data.
+
 ## Run locally
 
 Using the helper script:
