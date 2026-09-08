@@ -1,0 +1,13 @@
+{
+  "name": "public-speaking-workshop",
+  "version": "1.0.0",
+  "description": "Interactive 10-day public speaking workshop with SQLite progress tracking",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "sqlite3": "^5.1.7"
+  }
+}

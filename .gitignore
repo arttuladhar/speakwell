@@ -1,0 +1,23 @@
+# Local application data
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Runtime artifacts
+*.log
+uploads/
+recordings/
+
+# Dependencies and generated output
+node_modules/
+coverage/
+dist/
+
+# Local OS and editor files
+.DS_Store
+.vscode/

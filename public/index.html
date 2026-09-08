@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#176b50" />
+    <title>Speakwell — Your speaking journey</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <aside class="sidebar">
+      <a class="brand" href="#workshop"
+        ><span class="brand-mark">s<span>•</span></span> speakwell<span
+          class="brand-dot"
+          >.</span
+        ></a
+      >
+      <div class="workspace-label">YOUR PERSONAL SPEAKING COACH</div>
+      <nav aria-label="Main navigation">
+        <a href="#workshop" data-nav="workshop"
+          ><span data-icon="grid"></span>My workshop</a
+        >
+        <a href="#progress" data-nav="progress"
+          ><span data-icon="chart"></span>My progress</a
+        >
+        <a href="#journal" data-nav="journal"
+          ><span data-icon="book"></span>Practice journal</a
+        >
+      </nav>
+      <div class="sidebar-note">
+        <span data-icon="spark"></span>
+        <h3>Small steps. Stronger voice.</h3>
+        <p>
+          A few intentional minutes today can change how you speak tomorrow.
+        </p>
+        <span class="note-line"></span>
+      </div>
+      <div class="local-profile">
+        <span class="avatar">Y</span>
+        <div>
+          <strong>Your personal space</strong><small>One day at a time</small>
+        </div>
+        <span class="online-dot"></span>
+      </div>
+    </aside>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <span class="breadcrumb">Your learning space</span
+          ><span class="slash">/</span
+          ><strong id="page-label">My workshop</strong>
+        </div>
+        <span class="topbar-tag"
+          ><span class="online-dot"></span>10-day speaking journey</span
+        >
+      </header>
+      <main id="main" tabindex="-1">
+        <div class="loading">Getting your workshop ready…</div>
+      </main>
+      <footer>
+        Built through practice. Grown with confidence.<span
+          >MAKE YOURSELF HEARD.</span
+        >
+      </footer>
+    </div>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="/recordings.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
