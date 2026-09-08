@@ -16,6 +16,24 @@ const {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Fixed local account so contributors can sign in without registering. See README "Mock user".
+const MOCK_USER = {
+  name: "Demo Speaker",
+  email: "demo@speakwell.dev",
+  password: "password123",
+};
+
+async function seedMockUser() {
+  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+  if (isProduction || process.env.DISABLE_MOCK_USER === "true") return;
+  try {
+    await register(MOCK_USER);
+    console.log(`Mock user ready → ${MOCK_USER.email} / ${MOCK_USER.password}`);
+  } catch (error) {
+    if (!/unique|duplicate/i.test(error.message)) throw error;
+  }
+}
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -62,6 +80,7 @@ app.post("/api/auth/logout", async (req, res, next) => {
 });
 
 app.use("/api", requireAuth);
+
 
 app.get("/api/course", async (req, res) => {
   try {
@@ -506,6 +525,7 @@ const ready = initDb();
 
 if (require.main === module) {
   ready
+    .then(() => seedMockUser())
     .then(() => {
       const server = app.listen(PORT, () => {
         console.log(

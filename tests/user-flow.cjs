@@ -65,14 +65,19 @@ const { days, corePracticeLoop } = require("../data/courseSeed");
     await page
       .getByRole("heading", { name: "Your voice. A little stronger." })
       .waitFor();
-    assert.equal(await page.locator(".day-card").count(), 10);
+    assert.equal(await page.locator(".highlight-card").count(), 5);
     await page.screenshot({
       path: "/tmp/speakwell-desktop.png",
       fullPage: true,
     });
+    await page.getByRole("link", { name: "My progress", exact: true }).click();
+    await page.locator(".progress-row").first().waitFor();
+    assert.equal(await page.locator(".progress-row").count(), 10);
     for (const day of course.days) {
       assert.equal(day.resources.length, 2);
-      await page.locator(`.day-card[data-day="${day.day}"]`).click();
+      await page
+        .locator(`.progress-row button[data-day="${day.day}"]`)
+        .click();
       await page.locator("#practice-title").waitFor();
       assert.equal(new URL(page.url()).hash, `#day/${day.day}`);
       assert.equal(await page.locator("dialog").count(), 0);
@@ -83,6 +88,8 @@ const { days, corePracticeLoop } = require("../data/courseSeed");
       await page
         .getByRole("link", { name: "Back to workshop", exact: true })
         .click();
+      await page.getByRole("link", { name: "My progress", exact: true }).click();
+      await page.locator(".progress-row").first().waitFor();
     }
     await page.goto(`${process.env.APP_URL || "http://localhost:3000"}/#day/5`);
     await page

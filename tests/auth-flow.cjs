@@ -49,6 +49,15 @@ const { once } = require("node:events");
 
   try {
     const base = await startServer();
+    const mockLogin = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "demo@speakwell.dev",
+        password: "password123",
+      }),
+    });
+    assert.equal(mockLogin.status, 200);
     browser = await chromium.launch({ channel: "chrome", headless: true });
 
     const signupContext = await browser.newContext();
@@ -81,7 +90,15 @@ const { once } = require("node:events");
     await signinPage.getByLabel("Email address").fill("e2e-speaker@example.com");
     await signinPage.getByLabel("Password").fill("password123");
     await signinPage.getByRole("button", { name: "Sign in" }).click();
-    await signinPage.getByText("Your 10-day journey").waitFor();
+    await signinPage.getByText("How Speakwell works").waitFor();
+
+    await signinPage.route("**/api/auth/logout", (route) => route.abort());
+    await signinPage.getByRole("button", { name: "Log out" }).click();
+    await signinPage.getByText("Could not log out. Please retry.").waitFor();
+    await signinPage.getByText("How Speakwell works").waitFor();
+    await signinPage.unroute("**/api/auth/logout");
+    await signinPage.getByRole("button", { name: "Log out" }).click();
+    await signinPage.getByRole("heading", { name: "Welcome back." }).waitFor();
     await signinContext.close();
 
     const invalidContext = await browser.newContext();
@@ -97,7 +114,7 @@ const { once } = require("node:events");
       .waitFor();
     await invalidContext.close();
 
-    console.log("PASS: signup, deep-link restoration, signin, and invalid credentials.");
+    console.log("PASS: mock user, signup, deep-link restoration, signin, logout, and invalid credentials.");
   } finally {
     await browser?.close();
     await stopServer();

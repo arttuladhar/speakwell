@@ -2,9 +2,11 @@
 
 ## Scope
 
-Speakwell is a local-first application. The default server has no authentication or authorization and is not intended to be exposed directly to the public internet.
+Speakwell is a local-first application with local accounts and session-based authentication. It is not hardened for direct exposure to the public internet.
 
-Recordings, progress, and practice logs are stored in the configured SQLite database and are available to anyone who can reach the app. Treat the database and backups as sensitive personal data.
+Recordings, progress, and practice logs are isolated by account in the app and stored in the configured database. Anyone with database or backup access can read this sensitive personal data.
+
+Outside production, the server seeds a documented mock account with fixed credentials. Shared deployments must set `NODE_ENV=production` or `VERCEL=1`; set `DISABLE_MOCK_USER=true` as an additional safeguard.
 
 ## Reporting a vulnerability
 

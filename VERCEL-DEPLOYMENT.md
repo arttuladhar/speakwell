@@ -57,4 +57,4 @@ The local process needs `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN` from the pull
 - The current browser client uploads recordings through the API. Keep recordings within the Vercel function request limit; direct browser-to-Blob uploads should be added before supporting larger production recordings.
 - Do not rely on `/tmp` or the deployed project directory for persistent data.
 - Existing Docker deployments continue using SQLite and the named `workshop-data` volume.
-- Protect the application with authentication or network controls before exposing recordings publicly.
+- Keep the built-in authentication enabled and add network controls or another authentication layer before exposing the application publicly.

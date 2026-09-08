@@ -102,11 +102,11 @@ This deletion is irreversible.
 
 ## Production security
 
-This app has no user accounts or authentication. Before exposing it outside a trusted network:
+Speakwell has local accounts and per-user data isolation, but it is not hardened for direct public exposure. The production configuration above also prevents the fixed local mock user from being created. Before exposing the app outside a trusted network:
 
 - Put it behind HTTPS.
-- Add an authentication layer or restrict network access.
+- Add another authentication layer or restrict network access.
 - Use a firewall to limit access to the published port.
 - Back up the `workshop-data` volume.
 
-Browser camera and microphone capture requires `localhost` or HTTPS. Saved recordings are available to anyone who can access the app.
+Browser camera and microphone capture requires `localhost` or HTTPS. Accounts isolate recordings in the app, but anyone with database or backup access can read them.

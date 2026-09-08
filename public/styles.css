@@ -230,6 +230,11 @@ nav a.active {
   font-size: 11px;
   color: #748078;
 }
+#logout-button {
+  padding: 7px 12px;
+  font-size: 10px;
+  margin-left: 6px;
+}
 main {
   max-width: 1360px;
   margin: auto;
@@ -614,6 +619,58 @@ h1 {
 }
 .card-bottom .arrow {
   color: #4e7e5b;
+}
+.highlight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 15px;
+}
+.highlight-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 20px;
+  transition:
+    transform 0.16s,
+    border-color 0.16s,
+    box-shadow 0.16s;
+}
+.highlight-card:hover {
+  transform: translateY(-3px);
+  border-color: #9bb49a;
+  box-shadow: 0 7px 20px #243a3208;
+}
+.highlight-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  background: #f0f5ec;
+  color: #668157;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.highlight-icon svg {
+  width: 17px;
+  height: 17px;
+}
+.highlight-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  letter-spacing: -0.15px;
+}
+.highlight-card p {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 0;
 }
 .method {
   margin-top: 29px;
@@ -1048,6 +1105,9 @@ details ul {
   .course-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .highlight-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .stat {
     padding: 16px;
     gap: 11px;
@@ -1107,6 +1167,13 @@ details ul {
   }
   .topbar-tag {
     font-size: 9px;
+  }
+  #topbar-username {
+    display: none;
+  }
+  #logout-button {
+    padding: 6px 10px;
+    margin-left: 0;
   }
   .breadcrumb {
     display: none;
@@ -1174,6 +1241,10 @@ details ul {
     display: none;
   }
   .course-grid {
+    gap: 11px;
+  }
+  .highlight-grid {
+    grid-template-columns: 1fr;
     gap: 11px;
   }
   .day-card {

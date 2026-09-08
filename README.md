@@ -33,28 +33,26 @@ Open any day and use **Record your practice** below the exercise. Choose camera 
 - Uploads support WebM, MP4/M4A, Ogg audio, and WAV. Playback depends on your browser’s codec support; download is always available.
 - Live takes stop after 15 minutes or near the 50 MB file limit. The exercise timer and recording controls operate independently.
 - Leaving the day stops capture and keeps the unsaved preview until you reload or close the tab. Save or download before leaving the app. Failed saves retain your take for retry.
-- Saved recordings are stored with progress in `data/workshop.db`, including in the existing Docker data volume. Back up that database to preserve recordings. This remains a single shared workshop: recordings are available to anyone who can access the app.
+- Saved recordings are stored with progress in `data/workshop.db`, including in the existing Docker data volume. Back up that database to preserve recordings. The app isolates recordings by account, but anyone with database or backup access can read them.
 
 Use the guided prompts for self-review; the app does not generate automated speaking feedback.
 
 ## Browser flow check
 
-With the app running and Google Chrome installed:
+Playwright is installed as a dev dependency (`npm ci` or `npm install` sets it up). With Google Chrome installed:
 
 ```bash
-npm install --prefix /tmp/speakwell-browser-check playwright --no-audit --no-fund
-NODE_PATH=/tmp/speakwell-browser-check/node_modules node tests/user-flow.cjs
-NODE_PATH=/tmp/speakwell-browser-check/node_modules node tests/recordings.cjs
-NODE_PATH=/tmp/speakwell-browser-check/node_modules node tests/auth-flow.cjs
+npm start &                # tests/user-flow.cjs needs the app already running
+npm run test:user-flow
+npm run test:auth-flow     # spawns its own temporary server and database
 ```
 
 ### E2E scenarios
 
 - `tests/user-flow.cjs` — Uses isolated API fixtures to visit all 10 day screens, verify direct URLs and browser Back/Forward navigation, retain in-progress drafts and timers, open resources, retry a failed completion, render the journal safely, validate form input, and check desktop/mobile layouts.
-- `tests/recordings.cjs` — Starts a temporary server and database, creates a test account through the signup screen, captures a simulated video take, saves it after an interrupted response, verifies retry idempotency, playback, downloads, byte ranges, navigation cleanup, journal visibility, restart persistence, deletion, permission errors, validation errors, and mobile layout.
 - `tests/auth-flow.cjs` — Starts a temporary server and database, opens a protected deep link while signed out, switches between sign-in and signup, creates an account, verifies the deep link is restored, signs in from a fresh browser context, and confirms invalid credentials show an error without entering the workshop.
 
-The user-flow check uses isolated API fixtures. The recording and authentication checks launch their own servers with temporary databases. None of these checks changes your saved progress or uses your physical camera or microphone.
+The user-flow check uses isolated API fixtures. The authentication check launches its own server with a temporary database. Neither check changes your saved progress or uses your physical camera or microphone.
 
 ## Configuration
 
@@ -64,6 +62,7 @@ The server reads these optional environment variables:
 | --- | --- | --- |
 | `PORT` | `3000` | HTTP port used by the server |
 | `DATA_DIR` | `./data` | Directory containing the SQLite database |
+| `DISABLE_MOCK_USER` | unset | Set to `true` to skip seeding the local mock user outside production |
 
 Example:
 
@@ -93,6 +92,16 @@ npm start
 ```
 
 Open: `http://localhost:3000`
+
+### Mock user
+
+Outside production (no `NODE_ENV=production` or `VERCEL=1`), the server automatically creates a fixed local account on startup so you can sign in immediately without registering:
+
+| Email | Password |
+| --- | --- |
+| `demo@speakwell.dev` | `password123` |
+
+Set `DISABLE_MOCK_USER=true` to skip seeding this account. Do not rely on the mock user in production; it is skipped there automatically.
 
 ## Run with Docker
 
@@ -127,7 +136,7 @@ For a trusted server, copy the project to the host, install Docker and the Docke
 docker compose up -d --build
 ```
 
-Put the app behind HTTPS and an authentication layer before exposing it beyond a trusted network. Camera and microphone capture requires `localhost` or HTTPS, and recordings are available to anyone who can access the app.
+Put the app behind HTTPS and an additional authentication layer before exposing it beyond a trusted network. Camera and microphone capture requires `localhost` or HTTPS, and database access must remain restricted because recordings contain sensitive personal data.
 
 ## Contributing and security
 

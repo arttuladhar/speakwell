@@ -145,6 +145,8 @@ function stats() {
   return `<section class="stats" aria-label="Your practice statistics"><div class="stat"><span class="stat-icon">${icon("check")}</span><div><strong>${completed}<span> / ${course.days.length}</span></strong><p>Days completed</p></div></div><div class="stat"><span class="stat-icon">${icon("clock")}</span><div><strong>${logs.reduce((a, l) => a + l.duration_minutes, 0)}<span> min</span></strong><p>Time invested in you</p></div></div><div class="stat"><span class="stat-icon">${icon("chart")}</span><div><strong>${confidence}<span> / 10</span></strong><p>Average self-rated confidence</p></div></div></section>`;
 }
 function render() {
+  document.querySelector("#topbar-username").textContent =
+    authUser?.name || "";
   const dayMatch = /^#day\/(\d+)$/.exec(location.hash);
   const selectedDay =
     dayMatch && course.days.find((day) => day.day === Number(dayMatch[1]));
@@ -183,9 +185,38 @@ function renderWorkshop() {
     completed = course.days.filter(
       (d) => d.progress.status === "completed",
     ).length;
-  main.innerHTML = `<section class="intro"><div><div class="eyebrow">A LITTLE PRACTICE. A LOT OF POSSIBILITY.</div><h1>Your voice. A little stronger.</h1><p>Build the confidence to speak up, one small step at a time.</p></div><span class="pill">${icon("spark")} Your journey starts with you</span></section>${stats()}
+  const highlights = [
+    {
+      icon: "book",
+      title: "10 focused days",
+      body: "Each day builds one specific speaking skill — no overwhelm, just steady progress.",
+    },
+    {
+      icon: "video",
+      title: "Record yourself",
+      body: "Capture video or audio right in your practice screen, or upload a take you already have.",
+    },
+    {
+      icon: "eye",
+      title: "Watch, then listen",
+      body: "Review your recording muted, then again with sound, to notice different things each time.",
+    },
+    {
+      icon: "chart",
+      title: "Track your progress",
+      body: "See every milestone and self-rating whenever you like on My progress.",
+      href: "#progress",
+    },
+    {
+      icon: "headphones",
+      title: "Reflect in your journal",
+      body: "Save a few notes after each session and revisit them in your Practice journal.",
+      href: "#journal",
+    },
+  ];
+  main.innerHTML = `<section class="intro"><div><div class="eyebrow">WELCOME TO SPEAKWELL</div><h1>Your voice. A little stronger.</h1><p>A calm, guided space to practice speaking — one small step at a time.</p></div><span class="pill">${icon("spark")} Your journey starts with you</span></section>
   <div class="hero-grid"><section class="hero"><div class="hero-content"><div class="eyebrow"><span class="online-dot"></span>${completed === course.days.length ? "KEEP YOUR MOMENTUM" : day.progress.status === "in_progress" ? "PICK UP WHERE YOU LEFT OFF" : "YOUR NEXT SMALL STEP"} · DAY ${day.day}</div><h2>${escapeHtml(titles[day.day - 1])}</h2><p>${escapeHtml(day.focus)}</p><div class="hero-meta"><span>${icon("clock")} ${escapeHtml(day.exerciseDuration)}</span><span>•</span><span>${categories[day.day - 1]}</span></div><button class="button" data-day="${day.day}">${icon("play")} ${completed === course.days.length ? "Practice again" : day.progress.status === "in_progress" ? "Continue practice" : "Start today’s practice"} ${icon("arrow")}</button></div><div class="hero-art" aria-hidden="true"><div class="orbit"></div><div class="orbit two"></div><div class="orbit three"></div><div class="wave">${[23, 42, 72, 107, 139, 99, 66, 40, 21].map((h) => `<i style="--height:${h}px"></i>`).join("")}</div><span class="art-star">✧</span><span class="art-dot"></span></div></section><aside class="tip"><div class="tip-label">${icon("spark")} A MOMENT OF ENCOURAGEMENT</div><blockquote>“You don’t have to be perfect to be worth listening to.”</blockquote><p>Focus on showing up. The confidence will follow.</p><div class="tip-footer">PROGRESS OVER PERFECTION</div></aside></div>
-  <section><div class="section-head"><div><h2>Your 10-day journey</h2><p>One focus each day. Skills that stay with you.</p></div><span>${completed} of ${course.days.length} completed</span></div><div class="journey-progress" role="progressbar" aria-label="Course completion" aria-valuenow="${completed}" aria-valuemin="0" aria-valuemax="${course.days.length}"><span style="width:${(completed / course.days.length) * 100}%"></span></div><div class="course-grid">${course.days.map((d) => `<button class="day-card ${d.day === day.day ? "current" : ""}" data-day="${d.day}"><div class="card-top"><span class="day-number">DAY ${String(d.day).padStart(2, "0")}</span><span class="status ${d.progress.status} ${d.day === day.day ? "ready" : ""}">${status(d)}</span></div><h3>${escapeHtml(titles[d.day - 1])}</h3><p>${escapeHtml(d.focus)}</p><div class="card-bottom"><span>${icon("clock")} ${escapeHtml(d.exerciseDuration)}</span><span class="arrow">${icon(d.progress.status === "completed" ? "check" : "arrow")}</span></div></button>`).join("")}</div></section><section class="method"><div><h3>A simple loop. Real progress.</h3><p>Record in your practice screen, then discover what’s working.</p></div><div class="method-steps"><span>${icon("video")} Record yourself</span>→<span>${icon("eye")} Watch muted</span>→<span>${icon("headphones")} Listen back</span></div></section>`;
+  <section><div class="section-head"><div><h2>How Speakwell works</h2><p>A simple loop to build a stronger voice, one day at a time.</p></div></div><div class="highlight-grid">${highlights.map((h) => `<${h.href ? `a href="${h.href}"` : "div"} class="highlight-card"><span class="highlight-icon">${icon(h.icon)}</span><h3>${h.title}</h3><p>${h.body}</p></${h.href ? "a" : "div"}>`).join("")}</div></section>`;
 }
 function renderProgress() {
   main.innerHTML = `<section class="intro"><div><div class="eyebrow">EVERY SESSION COUNTS</div><h1>Look how far you’re going.</h1><p>Your practice adds up. Make space to notice it.</p></div></section>${stats()}<div class="section-head"><div><h2>Your milestones</h2><p>Revisit any exercise whenever you need a little extra practice.</p></div></div>${course.days.map((d) => `<div class="progress-row"><div><strong>Day ${d.day} · ${escapeHtml(titles[d.day - 1])}</strong><small>${status(d)}${d.progress.selfRating ? ` · Self-rating: ${d.progress.selfRating}/10` : ""}</small></div><button class="button secondary" data-day="${d.day}">${d.progress.status === "completed" ? "Revisit" : "Practice"} ${icon("arrow")}</button></div>`).join("")}`;
@@ -439,6 +470,24 @@ window.addEventListener("hashchange", () => {
 document.querySelector(".skip-link").addEventListener("click", (event) => {
   event.preventDefault();
   main.focus();
+});
+document.querySelector("#logout-button").addEventListener("click", async () => {
+  try {
+    const response = await fetch("/api/auth/logout", { method: "POST" });
+    if (!response.ok && response.status !== 401)
+      throw new Error("Could not log out");
+    recordings.stop();
+    stopTimer();
+    sessions.clear();
+    session = null;
+    course = undefined;
+    logs = [];
+    authUser = null;
+    history.replaceState(null, "", "#workshop");
+    renderAuth();
+  } catch {
+    notify("Could not log out. Please retry.");
+  }
 });
 window.addEventListener("beforeunload", (event) => {
   if ([...sessions.values()].some((s) => s.step > 0 && s.step < 3)) {

@@ -17,14 +17,16 @@ npm ci
 
 The app stores local state in `data/workshop.db`. Use `DATA_DIR` to point tests or experiments at a temporary directory.
 
+Outside production, the server seeds a fixed mock user (`demo@speakwell.dev` / `password123`) on startup so you can sign in without registering. See the README "Mock user" section for details, and set `DISABLE_MOCK_USER=true` to opt out.
+
 ## Testing
 
-The browser checks require Google Chrome and a temporary Playwright installation:
+The browser checks require Google Chrome; Playwright is installed via `npm ci`/`npm install`:
 
 ```bash
-npm install --prefix /tmp/speakwell-browser-check playwright --no-audit --no-fund
-NODE_PATH=/tmp/speakwell-browser-check/node_modules node tests/user-flow.cjs
-NODE_PATH=/tmp/speakwell-browser-check/node_modules node tests/recordings.cjs
+npm start &                # tests/user-flow.cjs needs the app already running
+npm run test:user-flow
+npm run test:auth-flow     # spawns its own temporary server and database
 ```
 
 Before submitting a change:
