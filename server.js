@@ -95,7 +95,7 @@ app.post("/api/recordings/client-upload", async (req, res) => {
   if (!isPostgres || !process.env.BLOB_READ_WRITE_TOKEN) {
     return res.status(404).json({ error: "Direct uploads are unavailable." });
   }
-  if (req.body?.type !== "blob.generate-client-token") {
+  if (!["blob.generate-client-token", "blob.upload-completed"].includes(req.body?.type)) {
     return res.status(400).json({ error: "Invalid recording upload request." });
   }
   try {
