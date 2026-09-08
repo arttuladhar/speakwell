@@ -121,6 +121,7 @@ async function destroySession(req, res) {
 
 module.exports = {
   createSession,
+  currentUser,
   destroySession,
   login,
   register,

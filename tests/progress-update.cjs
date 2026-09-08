@@ -57,6 +57,10 @@ const { once } = require("node:events");
     const cookie = login.headers.get("set-cookie").split(";", 1)[0];
     const user = await login.json();
 
+    const config = await fetch(`${base}/api/config`, { headers: { Cookie: cookie } });
+    assert.equal(config.status, 200);
+    assert.deepEqual(await config.json(), { directRecordingUpload: false });
+
     const course = await fetch(`${base}/api/course`, { headers: { Cookie: cookie } });
     assert.equal(course.status, 200);
     assert.equal((await course.json()).days.length, 10);

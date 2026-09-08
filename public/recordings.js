@@ -16,6 +16,7 @@ window.recordings = (() => {
       navigator.mediaDevices?.getUserMedia &&
       window.MediaRecorder
     );
+  let directUpload;
   const uid = () =>
     Array.from(crypto.getRandomValues(new Uint8Array(16)), (n) =>
       n.toString(16).padStart(2, "0"),
@@ -31,6 +32,19 @@ window.recordings = (() => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Please try again.");
     return data;
+  }
+  async function directRecordingUploadEnabled() {
+    if (directUpload === undefined)
+      directUpload = request("/api/config").then(
+        (config) => config.directRecordingUpload,
+      );
+    return directUpload;
+  }
+  async function checksum(blob) {
+    const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+    return Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
   }
   function library(day) {
     const root = document.createElement("section");
@@ -266,14 +280,31 @@ window.recordings = (() => {
     state.error = "";
     draw(state);
     try {
-      await request(
-        `/api/recordings/${state.id}?day=${state.day}${state.duration ? `&duration=${state.duration}` : ""}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": state.blob.type },
-          body: state.blob,
-        },
-      );
+      if (await directRecordingUploadEnabled()) {
+        const { upload } = await import("https://esm.sh/@vercel/blob@2.8.0/client");
+        await upload(`recordings/${state.id}`, state.blob, {
+          access: "public",
+          contentType: state.blob.type,
+          handleUploadUrl: "/api/recordings/client-upload",
+          multipart: state.blob.size > 4.5 * 1024 * 1024,
+          clientPayload: JSON.stringify({
+            id: state.id,
+            day: state.day,
+            duration: state.duration || null,
+            mime: state.blob.type,
+            checksum: await checksum(state.blob),
+          }),
+        });
+      } else {
+        await request(
+          `/api/recordings/${state.id}?day=${state.day}${state.duration ? `&duration=${state.duration}` : ""}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": state.blob.type },
+            body: state.blob,
+          },
+        );
+      }
       URL.revokeObjectURL(state.url);
       state.url = null;
       state.blob = null;

@@ -2,10 +2,12 @@ const path = require("path");
 const { createHash } = require("node:crypto");
 const express = require("express");
 const { del, put } = require("@vercel/blob");
+const { handleUpload } = require("@vercel/blob/client");
 const { corePracticeLoop, days } = require("./data/courseSeed");
 const { all, get, initDb, isPostgres, run } = require("./db");
 const {
   createSession,
+  currentUser,
   destroySession,
   login,
   register,
@@ -73,7 +75,92 @@ app.post("/api/auth/logout", async (req, res, next) => {
   }
 });
 
+const recordingTypes = new Set([
+  "video/webm",
+  "audio/webm",
+  "video/mp4",
+  "audio/mp4",
+  "audio/ogg",
+  "audio/wav",
+]);
+const validRecordingId = (id) => /^[a-f0-9]{32}$/.test(id);
+const maxRecordingBytes = 50 * 1024 * 1024;
+
+app.post("/api/recordings/client-upload", async (req, res) => {
+  if (!isPostgres || !process.env.BLOB_READ_WRITE_TOKEN) {
+    return res.status(404).json({ error: "Direct uploads are unavailable." });
+  }
+  try {
+    const result = await handleUpload({
+      body: req.body,
+      request: req,
+      onBeforeGenerateToken: async (pathname, clientPayload) => {
+        const user = await currentUser(req);
+        if (!user) throw new Error("Please sign in to continue.");
+        const recording = JSON.parse(clientPayload || "{}");
+        if (
+          pathname !== `recordings/${recording.id}` ||
+          !validRecordingId(recording.id) ||
+          !Number.isInteger(recording.day) ||
+          recording.day < 1 ||
+          recording.day > 10 ||
+          (recording.duration !== null &&
+            (!Number.isInteger(recording.duration) ||
+              recording.duration < 1 ||
+              recording.duration > 86400)) ||
+          !recordingTypes.has(recording.mime) ||
+          !/^[a-f0-9]{64}$/.test(recording.checksum)
+        ) {
+          throw new Error("Invalid recording details.");
+        }
+        return {
+          allowedContentTypes: [...recordingTypes],
+          maximumSizeInBytes: maxRecordingBytes,
+          addRandomSuffix: false,
+          tokenPayload: JSON.stringify({ ...recording, userId: user.id }),
+        };
+      },
+      onUploadCompleted: async ({ blob, tokenPayload }) => {
+        const recording = JSON.parse(tokenPayload || "{}");
+        if (
+          blob.pathname !== `recordings/${recording.id}` ||
+          blob.contentType !== recording.mime ||
+          !Number.isSafeInteger(blob.size) ||
+          blob.size < 1 ||
+          blob.size > maxRecordingBytes
+        ) {
+          throw new Error("Uploaded recording details did not match the request.");
+        }
+        await run(
+          `INSERT INTO user_recordings
+            (id, user_id, day, mime_type, duration_seconds, size_bytes, checksum, blob_url, blob_pathname)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+          [
+            recording.id,
+            recording.userId,
+            recording.day,
+            recording.mime,
+            recording.duration,
+            blob.size,
+            recording.checksum,
+            blob.url,
+            blob.pathname,
+          ],
+        );
+      },
+    });
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Could not authorize direct recording upload:", error);
+    res.status(400).json({ error: "Could not start the recording upload. Please retry." });
+  }
+});
+
 app.use("/api", requireAuth);
+
+app.get("/api/config", (req, res) => {
+  res.json({ directRecordingUpload: isPostgres && Boolean(process.env.BLOB_READ_WRITE_TOKEN) });
+});
 
 
 app.get("/api/course", async (req, res) => {
@@ -287,15 +374,6 @@ app.get("/api/logs", async (req, res) => {
 
 const recordingFields =
   "id, day, mime_type, duration_seconds, size_bytes, created_at";
-const recordingTypes = new Set([
-  "video/webm",
-  "audio/webm",
-  "video/mp4",
-  "audio/mp4",
-  "audio/ogg",
-  "audio/wav",
-]);
-const validRecordingId = (id) => /^[a-f0-9]{32}$/.test(id);
 
 app.get("/api/recordings", async (req, res) => {
   const day = req.query.day === undefined ? null : Number(req.query.day);
@@ -412,6 +490,7 @@ app.put(
       delete saved.checksum;
       res.status(201).json(saved);
     } catch (error) {
+      console.error("Could not save recording:", error);
       res
         .status(500)
         .json({

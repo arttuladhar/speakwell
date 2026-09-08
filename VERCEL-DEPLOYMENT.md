@@ -54,7 +54,7 @@ The local process needs `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN` from the pull
 
 - Neon should use its pooled connection string for serverless workloads.
 - Vercel Blob stores recording bytes; Postgres stores only metadata and Blob URLs.
-- The current browser client uploads recordings through the API. Keep recordings within the Vercel function request limit; direct browser-to-Blob uploads should be added before supporting larger production recordings.
+- Recording bytes upload directly from the browser to Vercel Blob. The API only authorizes the upload and stores metadata after Blob confirms completion, avoiding the Vercel Function request-body limit and long-running upload timeouts.
 - Do not rely on `/tmp` or the deployed project directory for persistent data.
 - Existing Docker deployments continue using SQLite and the named `workshop-data` volume.
 - Keep the built-in authentication enabled and add network controls or another authentication layer before exposing the application publicly.
